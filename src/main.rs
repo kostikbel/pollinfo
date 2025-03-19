@@ -36,7 +36,6 @@ fn get_errno() -> libc::c_int {
 
 fn main() {
     let args = PollArgs::parse();
-    println!("args id {} verbose {:?}", args.id, args.verbose);
 
     let res = unsafe {
 	libc::ptrace(libc::PT_ATTACH, args.id as i32, ptr::null_mut(), 0)
@@ -46,6 +45,9 @@ fn main() {
 	eprintln!("Attach to {} failed: {}", args.id, strerror(errno));
 	process::exit(1);
     }
+    if args.verbose >= 2 {
+	eprintln!("Attached to {}", args.id)
+    }
     let res = unsafe {
 	libc::ptrace(libc::PT_DETACH, args.id as i32, ptr::null_mut(), 0)
     };
@@ -53,6 +55,9 @@ fn main() {
 	let errno = get_errno();
 	eprintln!("Detach from {} failed: {}", args.id, strerror(errno));
 	process::exit(1);
+    }
+    if args.verbose >= 2 {
+	eprintln!("Detached from {}", args.id)
     }
     process::exit(0);
 }
