@@ -1,20 +1,17 @@
-
 use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct PollArgs {
-    /// Process ID to dump
+    /// Process/Thread ID to dump
     #[arg(short, long)]
-    pid: Option<u32>,
+    id: u32,
 
-    /// Thread ID to dump
-    #[arg(short, long)]
-    tid: Option<u32>,
+    // Verbose info about file descriptors
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
 }
 fn main() {
-    println!("Hello, world!");
-
     let args = PollArgs::parse();
-    println!("args pid {:?} tid {:?}", args.pid, args.tid);
+    println!("args id {} verbose {:?}", args.id, args.verbose);
 }
