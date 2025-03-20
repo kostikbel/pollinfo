@@ -65,6 +65,24 @@ fn main() {
 	eprintln!("Consumed initial stop event");
     }
 
+    let mut lwpi: libc::ptrace_lwpinfo = unsafe {
+	std::mem::zeroed()
+    };
+    let res = unsafe {
+	libc::ptrace(libc::PT_LWPINFO, args.id as i32, &raw mut lwpi as *mut i8,
+		     std::mem::size_of::<libc::ptrace_lwpinfo>() as i32)
+    };
+    if res == -1 {
+	let errno = get_errno();
+	eprintln!("Fetching lwpinfo failed: {}", strerror(errno));
+	process::exit(1);
+    }
+    if args.verbose >= 2 {
+	eprintln!("Fetched lwpinfo event {} flags {:#x} syscall {} nargs {}",
+		  lwpi.pl_event, lwpi.pl_flags,
+		  lwpi.pl_syscall_code, lwpi.pl_syscall_narg);
+    }
+
     let res = unsafe {
 	libc::ptrace(libc::PT_DETACH, args.id as i32, ptr::null_mut(), 0)
     };
