@@ -125,6 +125,12 @@ fn main() {
 	    if args.verbose >= 2 {
 		eprintln!("Fetched pollfd array");
 	    }
+
+	    println!("lwp id {} polling on:", lwpi.pl_lwpid);
+	    pfds.iter().filter(|pfd| { pfd.fd >= 0 }).for_each({|pfd| {
+		println!("{}", pfd.fd);
+	      }
+	    });
     }
 
     let res = unsafe {
