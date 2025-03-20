@@ -102,6 +102,29 @@ fn main() {
 		eprintln!("Fetched poll args pfds[] {} nfds {}",
 			  scargs[0], scargs[1]);
 	    }
+
+	    let nfds = scargs[1] as usize;
+	    let mut pfds = Vec::<libc::pollfd>::with_capacity(nfds);
+	    pfds.resize(nfds, libc::pollfd { fd: 0, events: 0, revents: 0 });
+	    let pfds_raw = pfds.as_mut_ptr();
+	    let mut pt_io_desc = libc::ptrace_io_desc {
+		piod_op: libc::PIOD_READ_D,
+		piod_offs: unsafe { std::mem::transmute(scargs[0]) },
+		piod_addr: pfds_raw as *mut libc::c_void,
+		piod_len: nfds * std::mem::size_of::<libc::pollfd>(),
+	    };
+	    let res = unsafe {
+		libc::ptrace(libc::PT_IO, args.id as i32,
+		    &raw mut pt_io_desc as *mut i8, 0)
+	    };
+	    if res == -1 {
+		let errno = get_errno();
+		eprintln!("Fetching pollfd array failed: {}", strerror(errno));
+		process::exit(1);
+	    }
+	    if args.verbose >= 2 {
+		eprintln!("Fetched pollfd array");
+	    }
     }
 
     let res = unsafe {
