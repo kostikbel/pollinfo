@@ -51,15 +51,14 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     }
 
     let nfds = scargs[1] as usize;
-    let mut pfds = Vec::<libc::pollfd>::with_capacity(nfds);
-    pfds.resize(
-        nfds,
+    let mut pfds = vec![
         libc::pollfd {
             fd: 0,
             events: 0,
             revents: 0,
-        },
-    );
+        };
+        nfds
+    ];
     let pfds_raw = pfds.as_mut_ptr();
     let mut pt_io_desc = libc::ptrace_io_desc {
         piod_op: libc::PIOD_READ_D,
