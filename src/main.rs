@@ -48,6 +48,23 @@ fn main() {
     if args.verbose >= 2 {
 	eprintln!("Attached to {}", args.id)
     }
+
+    let mut si: libc::siginfo_t = unsafe {
+	std::mem::zeroed()
+    };
+    let res = unsafe {
+	libc::waitid(libc::P_PID, args.id as libc::id_t, &mut si,
+		     libc::WUNTRACED)
+    };
+    if res == -1 {
+	let errno = get_errno();
+	eprintln!("Wait for initial stop failed: {}", strerror(errno));
+	process::exit(1);
+    }
+    if args.verbose >= 2 {
+	eprintln!("Consumed initial stop event");
+    }
+
     let res = unsafe {
 	libc::ptrace(libc::PT_DETACH, args.id as i32, ptr::null_mut(), 0)
     };
