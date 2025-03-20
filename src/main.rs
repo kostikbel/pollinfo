@@ -3,7 +3,6 @@ use std::ptr;
 use std::io::Error;
 use std::ffi::CStr;
 use std::ffi::c_char;
-use libc;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -36,8 +35,7 @@ fn get_errno() -> libc::c_int {
 
 fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     let nargs = lwpi.pl_syscall_narg as usize;
-    let mut scargs = Vec::<libc::register_t>::with_capacity(nargs);
-    scargs.resize(nargs, 0);
+    let mut scargs = vec![0; nargs];
     let scargs_raw = scargs.as_mut_ptr();
     let res = unsafe {
 	libc::ptrace(libc::PT_GET_SC_ARGS, args.id as i32,
@@ -59,7 +57,7 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     let pfds_raw = pfds.as_mut_ptr();
     let mut pt_io_desc = libc::ptrace_io_desc {
 	piod_op: libc::PIOD_READ_D,
-	piod_offs: unsafe { std::mem::transmute(scargs[0]) },
+	piod_offs: scargs[0] as *mut libc::c_void,
 	piod_addr: pfds_raw as *mut libc::c_void,
 	piod_len: nfds * std::mem::size_of::<libc::pollfd>(),
     };
