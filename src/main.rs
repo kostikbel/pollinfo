@@ -83,6 +83,27 @@ fn main() {
 		  lwpi.pl_syscall_code, lwpi.pl_syscall_narg);
     }
 
+    if lwpi.pl_syscall_code == 209 /* poll */ ||
+	lwpi.pl_syscall_code == 545 /* ppoll */ {
+	    let nargs = lwpi.pl_syscall_narg as usize;
+	    let mut scargs = Vec::<libc::register_t>::with_capacity(nargs);
+	    scargs.resize(nargs, 0);
+	    let scargs_raw = scargs.as_mut_ptr();
+	    let res = unsafe {
+		libc::ptrace(libc::PT_GET_SC_ARGS, args.id as i32,
+		    scargs_raw as *mut i8, 0)
+	    };
+	    if res == -1 {
+		let errno = get_errno();
+		eprintln!("Fetching poll args failed: {}", strerror(errno));
+		process::exit(1);
+	    }
+	    if args.verbose >= 2 {
+		eprintln!("Fetched poll args pfds[] {} nfds {}",
+			  scargs[0], scargs[1]);
+	    }
+    }
+
     let res = unsafe {
 	libc::ptrace(libc::PT_DETACH, args.id as i32, ptr::null_mut(), 0)
     };
