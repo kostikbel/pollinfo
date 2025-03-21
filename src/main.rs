@@ -163,8 +163,8 @@ fn handle_lwp(args: &PollArgs, lwpid: libc::lwpid_t) {
         libc::PT_LWPINFO, args, lwpid, &raw mut lwpi,
         std::mem::size_of::<libc::ptrace_lwpinfo>(),
         "Fetching lwpinfo failed: {}",
-        "Fetched lwpinfo event {} flags {:#x} syscall {} nargs {}",
-        lwpi.pl_event, lwpi.pl_flags, lwpi.pl_syscall_code,
+        "Fetched lwpinfo lwpid {} event {} flags {:#x} syscall {} nargs {}",
+        lwpi.pl_lwpid, lwpi.pl_event, lwpi.pl_flags, lwpi.pl_syscall_code,
 	lwpi.pl_syscall_narg,
     );
 
