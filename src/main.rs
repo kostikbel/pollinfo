@@ -1,3 +1,5 @@
+#![allow(path_statements)]
+
 use clap::Parser;
 use std::ffi::CStr;
 use std::ffi::c_char;
@@ -31,7 +33,7 @@ fn get_errno() -> libc::c_int {
 
 macro_rules! call_ptrace {
     ($ptrace_op:expr, $args:expr, $lwpid:expr, $addr:expr, $data:expr,
-     $err_fmt:expr, $ok_fmt:expr, $($x:expr,)* ) => {
+     $err_fmt:expr, $ok_fmt:expr, $($x:expr,)* ) => {{
         let res = unsafe {
 	    libc::ptrace($ptrace_op, $lwpid as i32, $addr as *mut i8,
 			 $data as i32)
@@ -44,7 +46,8 @@ macro_rules! call_ptrace {
         if $args.verbose >= 2 {
             eprintln!($ok_fmt, $($x,)*);
         }
-    };
+	res
+     }}
 }
 
 fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
