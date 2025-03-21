@@ -200,10 +200,21 @@ fn main() {
         eprintln!("Consumed initial stop event");
     }
 
-    /*
-     * XXXKIB Handle all LWPs for the process
-     */
-    handle_lwp(&args, args.id.try_into().unwrap());
+    let nlwps: usize = call_ptrace!(
+	libc::PT_GETNUMLWPS, args, args.id, ptr::null_mut(), 0,
+	"Querying the number of lwps failed: {}",
+	"Process {} runs {} lwps", args.id, res,) as usize;
+    let mut lwpids = vec![0; nlwps];
+    let lwpids_raw = lwpids.as_mut_ptr();
+    call_ptrace!(
+	libc::PT_GETLWPLIST, args, args.id, lwpids_raw,
+	nlwps * std::mem::size_of::<libc::lwpid_t>(),
+	"Fetching list of lwpids failed: {}",
+	"Fetched list of lwpids for process {}", args.id,
+    );
+    lwpids.iter().for_each(|lwpid| {
+	handle_lwp(&args, *lwpid)
+    });
 
     call_ptrace!(
 	libc::PT_DETACH, args, args.id, ptr::null_mut(), 0,
