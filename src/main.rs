@@ -118,7 +118,8 @@ fn handle_select(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     call_ptrace!(
         libc::PT_GET_SC_ARGS, args, scargs_raw, 0,
         "Fetching select args failed: {}",
-        "Fetched select args nfds {}", scargs[0],
+        "Fetched select args nfds {} {:#x} {:#x} {:#x}",
+	scargs[0], scargs[1], scargs[2], scargs[3],
     );
 
     println!("lwp id {} selecting on:", lwpi.pl_lwpid);
