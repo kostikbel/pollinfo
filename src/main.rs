@@ -30,10 +30,10 @@ fn get_errno() -> libc::c_int {
 }
 
 macro_rules! call_ptrace {
-    ($ptrace_op:expr, $args:expr, $addr:expr, $data:expr,
+    ($ptrace_op:expr, $args:expr, $lwpid:expr, $addr:expr, $data:expr,
      $err_fmt:expr, $ok_fmt:expr, $($x:expr,)* ) => {
         let res = unsafe {
-	    libc::ptrace($ptrace_op, $args.id as i32, $addr as *mut i8,
+	    libc::ptrace($ptrace_op, $lwpid as i32, $addr as *mut i8,
 			 $data as i32)
 	};
         if res == -1 {
@@ -57,7 +57,7 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     let mut scargs = vec![0; nargs];
     let scargs_raw = scargs.as_mut_ptr();
     call_ptrace!(
-        libc::PT_GET_SC_ARGS, args, scargs_raw,
+        libc::PT_GET_SC_ARGS, args, args.id, scargs_raw,
 	nargs * std::mem::size_of::<libc::register_t>(),
         "Fetching poll args failed: {}",
         "Fetched poll args pfds[] {} nfds {}", scargs[0], scargs[1],
@@ -74,7 +74,7 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
             piod_len: nfds * std::mem::size_of::<libc::pollfd>(),
 	};
 	call_ptrace!(
-	    libc::PT_IO, args, &raw mut pt_io_desc, 0,
+	    libc::PT_IO, args, args.id, &raw mut pt_io_desc, 0,
 	    "Fetching pollfd array failed: {}",
 	    "Fetched pollfd array",
 	);
@@ -91,7 +91,7 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     }});
 }
 
-fn handle_select_fetch_fds(_lwpi: &libc::ptrace_lwpinfo, args: &PollArgs,
+fn handle_select_fetch_fds(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs,
 fds: &mut Vec<u8>, fds_len: usize, off: libc::register_t, name: &str) {
     if off == 0 {
 	return;
@@ -104,7 +104,7 @@ fds: &mut Vec<u8>, fds_len: usize, off: libc::register_t, name: &str) {
         piod_len: fds_len,
     };
     call_ptrace!(
-	libc::PT_IO, args, &raw mut pt_io_desc, 0,
+	libc::PT_IO, args, lwpi.pl_lwpid, &raw mut pt_io_desc, 0,
 	"Fetching fds array failed: {}",
 	"Fetched {}fds array", name,
     );
@@ -120,7 +120,7 @@ fn handle_select(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     let mut scargs = vec![0; nargs];
     let scargs_raw = scargs.as_mut_ptr();
     call_ptrace!(
-        libc::PT_GET_SC_ARGS, args, scargs_raw,
+        libc::PT_GET_SC_ARGS, args, lwpi.pl_lwpid, scargs_raw,
 	nargs * std::mem::size_of::<libc::register_t>(),
         "Fetching select args failed: {}",
         "Fetched select args nfds {} {:#x} {:#x} {:#x}",
@@ -154,11 +154,31 @@ fn handle_select(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     }
 }
 
+fn handle_lwp(args: &PollArgs, lwpid: libc::lwpid_t) {
+    let mut lwpi: libc::ptrace_lwpinfo = unsafe { std::mem::zeroed() };
+    call_ptrace!(
+        libc::PT_LWPINFO, args, lwpid, &raw mut lwpi,
+        std::mem::size_of::<libc::ptrace_lwpinfo>(),
+        "Fetching lwpinfo failed: {}",
+        "Fetched lwpinfo event {} flags {:#x} syscall {} nargs {}",
+        lwpi.pl_event, lwpi.pl_flags, lwpi.pl_syscall_code,
+	lwpi.pl_syscall_narg,
+    );
+
+    if lwpi.pl_syscall_code == 209 /* poll */ ||
+	lwpi.pl_syscall_code == 545 /* ppoll */ {
+            handle_poll(&lwpi, &args)
+    } else if lwpi.pl_syscall_code == 93 /* select */ ||
+	lwpi.pl_syscall_code == 522 /* pselect */ {
+            handle_select(&lwpi, &args)
+    }
+}
+
 fn main() {
     let args = PollArgs::parse();
 
     call_ptrace!(
-	libc::PT_ATTACH, args, ptr::null_mut(), 0,
+	libc::PT_ATTACH, args, args.id, ptr::null_mut(), 0,
         "Attach failed: {}",
         "Attached to {}", args.id,
     );
@@ -180,26 +200,10 @@ fn main() {
     /*
      * XXXKIB Handle all LWPs for the process
      */
-    let mut lwpi: libc::ptrace_lwpinfo = unsafe { std::mem::zeroed() };
-    call_ptrace!(
-        libc::PT_LWPINFO, args, &raw mut lwpi,
-        std::mem::size_of::<libc::ptrace_lwpinfo>(),
-        "Fetching lwpinfo failed: {}",
-        "Fetched lwpinfo event {} flags {:#x} syscall {} nargs {}",
-        lwpi.pl_event, lwpi.pl_flags, lwpi.pl_syscall_code,
-	lwpi.pl_syscall_narg,
-    );
-
-    if lwpi.pl_syscall_code == 209 /* poll */ ||
-	lwpi.pl_syscall_code == 545 /* ppoll */ {
-            handle_poll(&lwpi, &args)
-    } else if lwpi.pl_syscall_code == 93 /* select */ ||
-	lwpi.pl_syscall_code == 522 /* pselect */ {
-            handle_select(&lwpi, &args)
-    }
+    handle_lwp(&args, args.id.try_into().unwrap());
 
     call_ptrace!(
-	libc::PT_DETACH, args, ptr::null_mut(), 0,
+	libc::PT_DETACH, args, args.id, ptr::null_mut(), 0,
         "Detach failed: {}",
         "Detached from {}", args.id,
     );
