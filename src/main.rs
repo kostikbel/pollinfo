@@ -49,6 +49,11 @@ macro_rules! call_ptrace {
 
 fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     let nargs = lwpi.pl_syscall_narg as usize;
+    if nargs < 3 {
+	eprintln!("poll-like syscall no {} with {} args",
+		  lwpi.pl_syscall_code, nargs);
+	return;
+    }
     let mut scargs = vec![0; nargs];
     let scargs_raw = scargs.as_mut_ptr();
     call_ptrace!(
@@ -59,18 +64,20 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
 
     let nfds = scargs[1] as usize;
     let mut pfds = vec![libc::pollfd { fd: 0, events: 0, revents: 0,}; nfds];
-    let pfds_raw = pfds.as_mut_ptr();
-    let mut pt_io_desc = libc::ptrace_io_desc {
-        piod_op: libc::PIOD_READ_D,
-        piod_offs: scargs[0] as *mut libc::c_void,
-        piod_addr: pfds_raw as *mut libc::c_void,
-        piod_len: nfds * std::mem::size_of::<libc::pollfd>(),
-    };
-    call_ptrace!(
-	libc::PT_IO, args, &raw mut pt_io_desc, 0,
-	"Fetching pollfd array failed: {}",
-	"Fetched pollfd array",
-    );
+    if nfds > 0 {
+	let pfds_raw = pfds.as_mut_ptr();
+	let mut pt_io_desc = libc::ptrace_io_desc {
+            piod_op: libc::PIOD_READ_D,
+            piod_offs: scargs[0] as *mut libc::c_void,
+            piod_addr: pfds_raw as *mut libc::c_void,
+            piod_len: nfds * std::mem::size_of::<libc::pollfd>(),
+	};
+	call_ptrace!(
+	    libc::PT_IO, args, &raw mut pt_io_desc, 0,
+	    "Fetching pollfd array failed: {}",
+	    "Fetched pollfd array",
+	);
+    }
 
     println!("lwp id {} polling on:", lwpi.pl_lwpid);
     pfds.iter().filter(|pfd| pfd.fd >= 0).for_each({
