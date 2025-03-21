@@ -80,11 +80,14 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     }
 
     println!("lwp id {} polling on:", lwpi.pl_lwpid);
-    pfds.iter().filter(|pfd| pfd.fd >= 0).for_each({
-        |pfd| {
-            println!("{}", pfd.fd);
-        }
-    });
+    pfds.iter().filter(|pfd| pfd.fd >= 0).for_each({|pfd| {
+	let instr = if (pfd.events & (libc::POLLIN | libc::POLLRDNORM |
+	    libc::POLLRDBAND | libc::POLLPRI)) != 0 { "r" } else { " "};
+	let outstr = if (pfd.events & (libc::POLLOUT | libc::POLLWRNORM |
+	    libc::POLLWRBAND)) != 0 { "w" } else { " "};
+	let exstr = "e"; /* POLERR is always checked */
+        println!("{:8} {}{}{}", pfd.fd, instr, outstr, exstr);
+    }});
 }
 
 fn handle_select_fetch_fds(_lwpi: &libc::ptrace_lwpinfo, args: &PollArgs,
