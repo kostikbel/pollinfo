@@ -170,10 +170,10 @@ fn handle_lwp(args: &PollArgs, lwpid: libc::lwpid_t) {
 
     if lwpi.pl_syscall_code == 209 /* poll */ ||
 	lwpi.pl_syscall_code == 545 /* ppoll */ {
-            handle_poll(&lwpi, &args)
+            handle_poll(&lwpi, args)
     } else if lwpi.pl_syscall_code == 93 /* select */ ||
 	lwpi.pl_syscall_code == 522 /* pselect */ {
-            handle_select(&lwpi, &args)
+            handle_select(&lwpi, args)
     }
 }
 
