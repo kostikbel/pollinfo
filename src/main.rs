@@ -1,3 +1,7 @@
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
 #![allow(path_statements)]
 
 use clap::Parser;
