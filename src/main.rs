@@ -18,13 +18,15 @@ use std::process;
 use std::ptr;
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+#[command(version,
+	  about = "Dump file descriptors causing poll/select to wait",
+	  long_about = None)]
 struct PollArgs {
-    /// Process/Thread ID to dump
+    /// Process ID to dump
     #[arg(short, long)]
     id: u32,
 
-    // Verbose info about file descriptors
+    /// Once for verbose info about file descriptors, twice for debug traces
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
 }
