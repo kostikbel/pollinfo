@@ -171,6 +171,9 @@ fn main() {
         eprintln!("Consumed initial stop event");
     }
 
+    /*
+     * XXXKIB Handle all LWPs for the process
+     */
     let mut lwpi: libc::ptrace_lwpinfo = unsafe { std::mem::zeroed() };
     call_ptrace!(
         libc::PT_LWPINFO, args, &raw mut lwpi,
