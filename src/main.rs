@@ -59,13 +59,24 @@ macro_rules! call_ptrace {
         if res == -1 {
             let errno = get_errno();
             eprintln!($err_fmt, strerror(errno));
-            process::exit(1);
+	    terminate($ctx, 1);
         }
         if $ctx.verbose >= 2 {
             eprintln!($ok_fmt, $($x,)*);
         }
 	res
      }}
+}
+
+fn terminate(ctx: &Context, ecode: i32) {
+    if ctx.attached {
+	call_ptrace!(
+	    libc::PT_DETACH, &ctx, ctx.id, ptr::null_mut(), 0,
+            "Detach failed: {}",
+            "Detached from {}", ctx.id,
+	);
+    }
+    process::exit(ecode)
 }
 
 fn handle_poll(lwpi: &libc::ptrace_lwpinfo, ctx: &Context) {
@@ -223,6 +234,8 @@ fn main() {
         eprintln!("Consumed initial stop event");
     }
 
+    ctx.attached = true;
+
     let nlwps: usize = call_ptrace!(
 	libc::PT_GETNUMLWPS, &ctx, ctx.id, ptr::null_mut(), 0,
 	"Querying the number of lwps failed: {}",
@@ -242,10 +255,5 @@ fn main() {
 	handle_lwp(&ctx, *lwpid)
     });
 
-    call_ptrace!(
-	libc::PT_DETACH, &ctx, ctx.id, ptr::null_mut(), 0,
-        "Detach failed: {}",
-        "Detached from {}", ctx.id,
-    );
-    process::exit(0);
+    terminate(&ctx, 0);
 }
