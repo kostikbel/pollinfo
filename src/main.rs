@@ -87,6 +87,52 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     });
 }
 
+fn handle_select_fetch_fds(_lwpi: &libc::ptrace_lwpinfo, args: &PollArgs,
+fds: &mut Vec<u8>, fds_len: usize, off: libc::register_t, name: &str) {
+    let fds_raw = fds.as_mut_ptr();
+    let mut pt_io_desc = libc::ptrace_io_desc {
+        piod_op: libc::PIOD_READ_D,
+        piod_offs: off as *mut libc::c_void,
+        piod_addr: fds_raw as *mut libc::c_void,
+        piod_len: fds_len,
+    };
+    call_ptrace!(
+	libc::PT_IO, args, &raw mut pt_io_desc, 0,
+	"Fetching fds array failed: {}",
+	"Fetched {}fds array", name,
+    );
+}
+
+fn handle_select(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
+    let nargs = lwpi.pl_syscall_narg as usize;
+    if nargs < 5 {
+	eprintln!("select-like syscall no {} with {} args",
+		  lwpi.pl_syscall_code, nargs);
+	return;
+    }
+    let mut scargs = vec![0; nargs];
+    let scargs_raw = scargs.as_mut_ptr();
+    call_ptrace!(
+        libc::PT_GET_SC_ARGS, args, scargs_raw, 0,
+        "Fetching select args failed: {}",
+        "Fetched select args nfds {}", scargs[0],
+    );
+
+    println!("lwp id {} selecting on:", lwpi.pl_lwpid);
+    let nfds = scargs[0] as usize;
+    if nfds == 0 {
+	return;
+    }
+    let fds_len = nfds.div_ceil(u8::BITS as usize);
+
+    let mut infds = vec![0u8; fds_len];
+    handle_select_fetch_fds(lwpi, args, &mut infds, fds_len, scargs[1], "in");
+    let mut outfds = vec![0u8; fds_len];
+    handle_select_fetch_fds(lwpi, args, &mut outfds, fds_len, scargs[2], "out");
+    let mut exfds = vec![0u8; fds_len];
+    handle_select_fetch_fds(lwpi, args, &mut exfds, fds_len, scargs[3], "ex");
+}
+
 fn main() {
     let args = PollArgs::parse();
 
@@ -123,6 +169,9 @@ fn main() {
     if lwpi.pl_syscall_code == 209 /* poll */ ||
 	lwpi.pl_syscall_code == 545 /* ppoll */ {
             handle_poll(&lwpi, &args)
+    } else if lwpi.pl_syscall_code == 93 /* select */ ||
+	lwpi.pl_syscall_code == 522 /* pselect */ {
+            handle_select(&lwpi, &args)
     }
 
     call_ptrace!(
