@@ -57,7 +57,8 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     let mut scargs = vec![0; nargs];
     let scargs_raw = scargs.as_mut_ptr();
     call_ptrace!(
-        libc::PT_GET_SC_ARGS, args, scargs_raw, 0,
+        libc::PT_GET_SC_ARGS, args, scargs_raw,
+	nargs * std::mem::size_of::<libc::register_t>(),
         "Fetching poll args failed: {}",
         "Fetched poll args pfds[] {} nfds {}", scargs[0], scargs[1],
     );
@@ -116,7 +117,8 @@ fn handle_select(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     let mut scargs = vec![0; nargs];
     let scargs_raw = scargs.as_mut_ptr();
     call_ptrace!(
-        libc::PT_GET_SC_ARGS, args, scargs_raw, 0,
+        libc::PT_GET_SC_ARGS, args, scargs_raw,
+	nargs * std::mem::size_of::<libc::register_t>(),
         "Fetching select args failed: {}",
         "Fetched select args nfds {} {:#x} {:#x} {:#x}",
 	scargs[0], scargs[1], scargs[2], scargs[3],
