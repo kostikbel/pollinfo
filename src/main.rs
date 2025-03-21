@@ -131,6 +131,18 @@ fn handle_select(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
     handle_select_fetch_fds(lwpi, args, &mut outfds, fds_len, scargs[2], "out");
     let mut exfds = vec![0u8; fds_len];
     handle_select_fetch_fds(lwpi, args, &mut exfds, fds_len, scargs[3], "ex");
+
+    for fd in 0..(nfds - 1) {
+	let idx = fd / u8::BITS as usize;
+	let bit = 1 << (fd % u8::BITS as usize);
+	if (infds[idx] | outfds[idx] | exfds[idx]) & bit == 0 {
+	    continue;
+	}
+	let instr = if (infds[idx] & bit) != 0 { "i" } else { " " };
+	let outstr = if (outfds[idx] & bit) != 0 { "o" } else { " " };
+	let exstr = if (exfds[idx] & bit) != 0 { "e" } else { " "} ;
+	println!("{:8} {}{}{}", fd, instr, outstr, exstr)
+    }
 }
 
 fn main() {
