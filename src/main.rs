@@ -49,6 +49,11 @@ fn get_errno() -> libc::c_int {
     Error::last_os_error().raw_os_error().unwrap()
 }
 
+fn cstring_to_string(bytes: &[libc::c_char]) -> String {
+    unsafe { std::str::from_utf8_unchecked(std::mem::transmute(bytes)) }.
+	to_string()
+}
+
 macro_rules! call_ptrace {
     ($ptrace_op:expr, $ctx:expr, $lwpid:expr, $addr:expr, $data:expr,
      $err_fmt:expr, $ok_fmt:expr, $($x:expr,)* ) => {{
@@ -112,7 +117,8 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, ctx: &Context) {
 	);
     }
 
-    println!("lwp id {} polling on:", lwpi.pl_lwpid);
+    println!("lwp id {} ({}) polling on:", lwpi.pl_lwpid,
+	     cstring_to_string(&lwpi.pl_tdname));
     pfds.iter().filter(|pfd| pfd.fd >= 0).for_each({|pfd| {
 	let instr = if (pfd.events & (libc::POLLIN | libc::POLLRDNORM |
 	    libc::POLLRDBAND | libc::POLLPRI)) != 0 { "r" } else { " "};
@@ -159,7 +165,8 @@ fn handle_select(lwpi: &libc::ptrace_lwpinfo, ctx: &Context) {
 	scargs[0], scargs[1], scargs[2], scargs[3],
     );
 
-    println!("lwp id {} selecting on:", lwpi.pl_lwpid);
+    println!("lwp id {} ({}) selecting on:", lwpi.pl_lwpid,
+	     cstring_to_string(&lwpi.pl_tdname));
     let nfds = scargs[0] as usize;
     if nfds == 0 {
 	return;
