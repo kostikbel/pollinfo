@@ -65,7 +65,7 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
 
     let nfds = scargs[1] as usize;
     let mut pfds = vec![libc::pollfd { fd: 0, events: 0, revents: 0,}; nfds];
-    if nfds > 0 {
+    if nfds > 0 && scargs[0] != 0 {
 	let pfds_raw = pfds.as_mut_ptr();
 	let mut pt_io_desc = libc::ptrace_io_desc {
             piod_op: libc::PIOD_READ_D,
@@ -93,6 +93,9 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, args: &PollArgs) {
 
 fn handle_select_fetch_fds(_lwpi: &libc::ptrace_lwpinfo, args: &PollArgs,
 fds: &mut Vec<u8>, fds_len: usize, off: libc::register_t, name: &str) {
+    if off == 0 {
+	return;
+    }
     let fds_raw = fds.as_mut_ptr();
     let mut pt_io_desc = libc::ptrace_io_desc {
         piod_op: libc::PIOD_READ_D,
