@@ -11,11 +11,17 @@
 #![allow(path_statements)]
 
 use clap::Parser;
+use std::collections::HashMap;
 use std::ffi::CStr;
 use std::ffi::c_char;
+use std::io;
 use std::io::Error;
+use std::io::Write;
 use std::process;
+use std::process::Command;
+use std::process::Output;
 use std::ptr;
+use std::str;
 
 #[derive(Parser, Debug)]
 #[command(version,
@@ -35,6 +41,7 @@ struct Context {
     id: u32,
     verbose: u8,
     attached: bool,
+    fd_info: HashMap<usize, String>,
 }
 
 fn c_char_ptr_to_string(ptr: *const c_char) -> String {
@@ -125,7 +132,16 @@ fn handle_poll(lwpi: &libc::ptrace_lwpinfo, ctx: &Context) {
 	let outstr = if (pfd.events & (libc::POLLOUT | libc::POLLWRNORM |
 	    libc::POLLWRBAND)) != 0 { "w" } else { " "};
 	let exstr = "e"; /* POLERR is always checked */
-        println!("{:8} {}{}{}", pfd.fd, instr, outstr, exstr);
+        print!("{:8} {}{}{}", pfd.fd, instr, outstr, exstr);
+	if ctx.verbose >= 1 {
+	    let fd = pfd.fd as usize;
+	    let info = match ctx.fd_info.get(&fd) {
+		Some(v) => v,
+		None => "",
+	    };
+	    print!(" {}", info);
+	}
+	println!("");
     }});
 }
 
@@ -189,7 +205,15 @@ fn handle_select(lwpi: &libc::ptrace_lwpinfo, ctx: &Context) {
 	let instr = if (infds[idx] & bit) != 0 { "i" } else { " " };
 	let outstr = if (outfds[idx] & bit) != 0 { "o" } else { " " };
 	let exstr = if (exfds[idx] & bit) != 0 { "e" } else { " "} ;
-	println!("{:8} {}{}{}", fd, instr, outstr, exstr)
+	print!("{:8} {}{}{}", fd, instr, outstr, exstr);
+	if ctx.verbose >= 1 {
+	    let info = match ctx.fd_info.get(&fd) {
+		Some(v) => v,
+		None => "",
+	    };
+	    print!(" {}", info);
+	}
+	println!("");
     }
 }
 
@@ -213,12 +237,88 @@ fn handle_lwp(ctx: &Context, lwpid: libc::lwpid_t) {
     }
 }
 
+fn parse_procstat(ctx: &mut Context, procstat: &str) {
+    if ctx.verbose >= 2 {
+	eprintln!("Parsing procstat files {} output", ctx.id);
+    }
+    procstat.lines().skip(1).for_each(|line| {
+	let mut fields = line.split(char::is_whitespace)
+	    .filter(|str| { str.len() > 0 });
+	let _pid = fields.next();
+	let _comm = fields.next();
+	let fd_str = match fields.next() {
+	    Some(fd_strx) => {
+		if fd_strx.len() != 0 { fd_strx } else { "" }
+	    },
+	    None => { return },
+	};
+	let fd = match usize::from_str_radix(fd_str, 10) {
+	    Ok(res) => res,
+	    Err(_) => { return },
+	};
+	let mut info_str = "".to_string();
+	fields.for_each(|f| {
+	    info_str.push_str(" ");
+	    info_str.push_str(f); }
+	);
+	if ctx.verbose >= 2 {
+	    eprintln!("fd {} info {}", fd, info_str);
+	}
+	ctx.fd_info.insert(fd, info_str.to_string());
+    });
+}
+
+fn call_procstat(ctx: &mut Context) {
+    let procstat_result = Command::new("procstat")
+	.arg("files")
+	.arg(ctx.id.to_string())
+	.output();
+
+    match procstat_result {
+	Err(error) => {
+	    eprintln!("Execution of procstat failed, error {}", error);
+	    terminate(&ctx, 1);
+	}
+	Ok(Output{status: procstat_status, stdout: procstat_stdout,
+		  stderr: procstat_stderr}) => {
+	    if ctx.verbose >= 2 {
+		eprintln!("Executing procstat files {}", ctx.id);
+	    }
+	    if procstat_status.success() {
+		let procstat_str = match str::from_utf8(
+		    procstat_stdout.as_slice()) {
+		    Ok(v) => v,
+		    Err(e) => {
+			eprintln!("Invalid UTF-8 sequence from procstat: {}", e);
+			terminate(&ctx, 1);
+			""
+		    }
+		};
+		parse_procstat(ctx, &procstat_str)
+	    } else {
+		match procstat_status.code() {
+		    None => {
+			eprintln!("procstat terminated by signal")
+		    }
+		    Some(exit_code) => {
+			eprintln!("procstat exited with code {}", exit_code);
+		    }
+		}
+		eprintln!("procstat error:");
+		let _ = io::stderr().write(procstat_stderr.as_slice());
+		terminate(&ctx, 1);
+	    }
+	}
+    }
+}
+
 fn main() {
     let args = PollArgs::parse();
     let mut ctx = Context {
 	id: args.id,
 	verbose: args.verbose,
 	attached: false,
+	fd_info: HashMap::new(),
     };
 
     call_ptrace!(
@@ -242,6 +342,10 @@ fn main() {
     }
 
     ctx.attached = true;
+
+    if ctx.verbose >= 1 {
+	call_procstat(&mut ctx);
+    }
 
     let nlwps: usize = call_ptrace!(
 	libc::PT_GETNUMLWPS, &ctx, ctx.id, ptr::null_mut(), 0,
