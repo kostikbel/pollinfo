@@ -1,0 +1,86 @@
+.Dd April 4, 2025
+.Dt POLLINFO 1
+.Os
+.Sh NAME
+.Nm pollinfo
+.Nd list file descriptors causing wait in poll and select
+.Sh SYNOPSIS
+.Nm
+.Op Fl v
+.Op Fl -id Va pid
+.Sh DESCRIPTION
+The
+.Nm
+utility lists all threads (light-weigt processes, lwps) in the process
+specified by the
+.Ar id
+argument, which are sleeping in the
+.Xr select 2
+or
+.Xr poll 2
+families of syscalls.
+For each such thread, the list of the file descriptors passed to the
+syscall to wait for readiness, together with the type of the wait
+(read/write/exception) is printed.
+.Pp
+If the
+.Fl v
+option is specified, additional information about file descriptors is
+printed on the same line, in the format of the
+.Xr procstat 1
+.Cm files
+subcommand.
+.Pp
+Passing the
+.Fl v
+option twice also prints internal debugging information about
+.Nm
+running.
+.Sh EXAMPLE
+.Bd -literal
+# ps l 2381
+UID  PID PPID  C PRI NI   VSZ  RSS MWCHAN STAT TT     TIME COMMAND
+123 2381    1 29  20  0 20584 5604 select Ss    -  0:00.39 /usr/sbin/ntpd -p /v
+# pollinfo --id 2381 -v
+lwp id 100259 (ntpd) selecting on:
+      20 i    s - rw---n-- 1 0 UDP ::.123 ::.0
+      21 i    s - rw---n-- 1 0 UDP *:123 *:0
+      22 i    s - rw---n-- 1 0 UDP 192.168.130.12:123 *:0
+      23 i    s - rw---n-- 1 0 UDP fe80::2a80:23ff:fea2:37bc.123 ::.0
+      24 i    s - rw---n-- 1 0 UDP ::1.123 ::.0
+      25 i    s - rw---n-- 1 0 UDP fe80::1.123 ::.0
+      26 i    s - rw---n-- 1 0 UDP 127.0.0.1:123 *:0
+.Ed
+.Sh SEE ALSO
+.Xr procstat 1 ,
+.Xr select 2 ,
+.Xr poll 2 ,
+.Xr ppoll 2 ,
+.Xr pselect 2 ,
+.Xr ptrace 2
+.Sh NOTES
+.Nm
+is
+.Fx -specific
+and only works on
+.Fx .
+.Pp
+.Nm
+uses
+.Xr ptrace 2
+to attach to the target process and gather information about sleeping
+threads and syscall arguments.
+It needs permissions to attach, and it must be the only debugger, due
+to way the
+.Xr ptrace 2
+facility work.
+.Pp
+If the process debugging is disabled for the target,
+.Nm
+cannot work.
+.Pp
+Killing
+.Nm
+while the utility is attached to the target, also kills the target.
+.Sh AUTHORS
+.An Konstantin Belousov Aq Mt kib@FreeBSD.org .
