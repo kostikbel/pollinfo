@@ -65,8 +65,8 @@ macro_rules! call_ptrace {
     ($ptrace_op:expr, $ctx:expr, $lwpid:expr, $addr:expr, $data:expr,
      $err_fmt:expr, $ok_fmt:expr, $($x:expr,)* ) => {{
         let res = unsafe {
-	    libc::ptrace($ptrace_op, $lwpid as i32, $addr as *mut i8,
-			 $data as i32)
+	    libc::ptrace($ptrace_op, $lwpid as libc::pid_t,
+			 $addr as *mut c_char, $data as libc::c_int)
 	};
         if res == -1 {
             let errno = get_errno();
